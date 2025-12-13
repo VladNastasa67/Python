@@ -1,6 +1,10 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from models import add_expense, get_expenses, get_categories, delete_expense, update_expense, add_category
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from collections import defaultdict
+
 
 class ExpenseApp:
     def __init__(self, root):
@@ -19,6 +23,7 @@ class ExpenseApp:
 
         self.build_form()
         self.build_table()
+        self.build_reports()
         self.load_expenses()
 
     def build_form(self):
@@ -119,6 +124,18 @@ class ExpenseApp:
        self.total_label.pack(pady=5)
 
 
+    def build_reports(self):
+        frame=tk.Frame(self.root)
+        frame.pack(fill="both", expand=False, padx=10, pady=10)
+
+        self.fig=Figure(figsize=(8,3))
+        self.ax_pie = self.fig.add_subplot(121)
+        self.ax_bar = self.fig.add_subplot(122)
+        
+        self.canvas = FigureCanvasTkAgg(self.fig, master=frame)
+        self.canvas.get_tk_widget().pack(fill="both", expand=True)
+        self.canvas.mpl_connect("button_press_event", self.on_chart_click)
+
 
     def load_expenses(self, event=None):
         for row in self.tree.get_children():
@@ -133,6 +150,7 @@ class ExpenseApp:
         selected_month = self.month_var.get()
         selected_category = self.filter_category_var.get()
         total = 0
+        per_category = defaultdict(float)
 
         for e in expenses:
             if selected_month and selected_month != "All":
@@ -144,9 +162,33 @@ class ExpenseApp:
                     continue
             self.tree.insert("", "end", values=e)
             total += e[2]
+            per_category[e[3]] += e[2]
 
         self.total_label.config(text=f"Total: {total}")
         self.selected_id = None
+    
+        self.update_charts(per_category)
+
+    def on_chart_click(self, event):
+        if event.inaxes == self.ax_pie:
+            for wedge, label in zip(self.ax_pie.patches, self.ax_pie.texts):
+                if wedge.contains_point((event.x, event.y)):
+                    self.highlight_category(label.get_text())
+                    return
+
+        if event.inaxes == self.ax_bar:
+            for bar, label in zip(self.ax_bar.patches, self.ax_bar.get_xticklabels()):
+               if bar.contains(event)[0]:
+                    self.highlight_category(label.get_text())
+                    return
+
+    def highlight_category(self, category):
+        for row in self.tree.get_children():
+            values = self.tree.item(row)["values"]
+            if values[3] == category:
+               self.tree.selection_add(row)
+            else:
+               self.tree.selection_remove(row)
 
 
     def on_select(self, event):
@@ -232,3 +274,25 @@ class ExpenseApp:
 
         delete_expense(self.selected_id)
         self.load_expenses()
+
+    def update_charts(self, per_category):
+       self.ax_pie.clear()
+       self.ax_bar.clear()
+
+       if not per_category:
+           self.canvas.draw()
+           return
+
+       labels = list(per_category.keys())
+       values = list(per_category.values())
+
+       self.ax_pie.pie(values, labels=labels, autopct="%1.1f%%")
+       self.ax_pie.set_title("Share by category")
+
+       self.ax_bar.bar(labels, values)
+       self.ax_bar.set_title("Amount by category")
+       self.ax_bar.set_ylabel("Amount")
+
+       self.fig.tight_layout()
+       self.canvas.draw()
+
