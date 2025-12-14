@@ -4,6 +4,8 @@ from models import add_expense, get_expenses, get_categories, delete_expense, up
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from collections import defaultdict
+import csv
+from tkinter import filedialog
 
 
 class ExpenseApp:
@@ -83,6 +85,8 @@ class ExpenseApp:
         self.new_category_entry.pack(side="left", padx=5)
 
         tk.Button(category_frame, text="Add category", command=self.add_category).pack(side="left")
+        tk.Button(filter_frame, text="Export CSV", command=self.export_csv).pack(side="right")
+
 
 
     def build_table(self):
@@ -295,4 +299,38 @@ class ExpenseApp:
 
        self.fig.tight_layout()
        self.canvas.draw()
+
+    def export_csv(self):
+        rows = []
+        for item in self.tree.get_children():
+           rows.append(self.tree.item(item)["values"])
+
+        if not rows:
+           messagebox.showerror("Error", "No data to export")
+           return
+
+        month = self.month_var.get()
+        if not month or month == "All":
+           month = "all"
+
+        file_path = filedialog.asksaveasfilename(
+           defaultextension=".csv",
+           filetypes=[("CSV files", "*.csv")],
+           initialfile=f"expenses_{month}.csv"
+        )
+
+        if not file_path:
+           return
+
+        try:
+           with open(file_path, "w", newline="", encoding="utf-8") as f:
+               writer = csv.writer(f)
+               writer.writerow(["Id", "Date", "Amount", "Category", "Note"])
+               for r in rows:
+                   writer.writerow(r)
+
+           messagebox.showinfo("Success", "Export completed successfully")
+
+        except Exception:
+            messagebox.showerror("Error", "Failed to export CSV")
 
